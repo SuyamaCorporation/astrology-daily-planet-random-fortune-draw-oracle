@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>占星術・今日の惑星配置ランダムフォーチュンオラクル</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+    body { font-family: 'Noto Sans JP', sans-serif; }
+    .star-bg {
+      background: radial-gradient(ellipse at center, #1a0533 0%, #0a0118 70%, #000 100%);
+    }
+    .planet-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+    }
+    .glow {
+      text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in-up {
+      animation: fadeInUp 0.5s ease forwards;
+    }
+    .star {
+      position: absolute;
+      border-radius: 50%;
+      background: white;
+      animation: twinkle var(--duration) ease-in-out infinite;
+      animation-delay: var(--delay);
+    }
+  </style>
+</head>
+<body class="star-bg min-h-screen text-white">
+
+  <!-- Stars background -->
+  <div id="stars-container" class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true"></div>
+
+  <main class="relative z-10 max-w-3xl mx-auto px-4 py-10">
+    <header class="text-center mb-10">
+      <h1 class="text-3xl sm:text-4xl font-bold mb-2 text-purple-200 glow">
+        ✨ 今日の星占いオラクル ✨
+      </h1>
+      <p class="text-purple-400 text-sm">惑星たちが今日のあなたへメッセージを届けます</p>
+    </header>
+
+    <section class="text-center mb-8">
+      <button
+        id="draw-btn"
+        class="bg-purple-700 hover:bg-purple-600 active:bg-purple-800 text-white font-bold py-4 px-10 rounded-full text-lg transition-all duration-200 shadow-lg shadow-purple-900 focus:outline-none focus:ring-4 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-transparent"
+        aria-label="今日の星占いを引く"
+      >
+        🌟 今日の星占いを見る
+      </button>
+      <p id="last-drawn" class="text-purple-500 text-xs mt-3" aria-live="polite"></p>
+    </section>
+
+    <section id="result-section" class="hidden" aria-live="polite" aria-label="占い結果">
+      <div id="overall-message" class="planet-card rounded-2xl p-6 mb-6 text-center border-purple-500 border-2">
+        <p class="text-purple-300 text-xs mb-2">今日の総合メッセージ</p>
+        <p id="overall-text" class="text-lg font-semibold text-white leading-relaxed"></p>
+      </div>
+
+      <h2 class="text-center text-purple-300 text-sm mb-4">惑星配置</h2>
+      <div id="planets-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
+
+      <div class="planet-card rounded-2xl p-5 text-center">
+        <p class="text-purple-300 text-xs mb-1">ラッキーカラー</p>
+        <p id="lucky-color" class="text-xl font-bold"></p>
+        <p class="text-purple-300 text-xs mt-3 mb-1">ラッキーナンバー</p>
+        <p id="lucky-number" class="text-xl font-bold text-yellow-300"></p>
+      </div>
+    </section>
+
+    <section id="history-section" class="mt-8 hidden">
+      <h2 class="text-purple-400 text-sm font-bold mb-3">過去の占い履歴</h2>
+      <div id="history-list" class="space-y-2"></div>
+      <button
+        id="clear-history-btn"
+        class="mt-4 text-xs text-purple-600 hover:text-purple-400 underline focus:outline-none focus:ring-2 focus:ring-purple-400 rounded"
+        aria-label="履歴を削除する"
+      >履歴を消去</button>
+    </section>
+  </main>
+
+  <script>
+    const PLANETS = [
+      { name: '太陽', symbol: '☉', color: '#FFD700', key: 'sun' },
+      { name: '月',   symbol: '☽', color: '#C8D8E8', key: 'moon' },
+      { name: '水星', symbol: '☿', color: '#A0A0B0', key: 'mercury' },
+      { name: '金星', symbol: '♀', color: '#FFB7C5', key: 'venus' },
+      { name: '火星', symbol: '♂', color: '#FF6B6B', key: 'mars' },
+      { name: '木星', symbol: '♃', color: '#F4A460', key: 'jupiter' },
+      { name: '土星', symbol: '♄', color: '#D4B896', key: 'saturn' },
+    ];
+
+    const SIGNS = [
+      { name: '牡羊座', symbol: '♈', element: '火', keyword: '情熱', advice: '行動力が開運の鍵' },
+      { name: '牡牛座', symbol: '♉', element: '地', keyword: '安定', advice: '心地よい場所が幸運を呼ぶ' },
+      { name: '双子座', symbol: '♊', element: '風', keyword: '知性', advice: '情報交換で新たな扉が開く' },
+      { name: '蟹座',   symbol: '♋', element: '水', keyword: '感情', advice: '直感を信じて動こう' },
+      { name: '獅子座', symbol: '♌', element: '火', keyword: '創造', advice: '自信を持って輝ける日' },
+      { name: '乙女座', symbol: '♍', element: '地', keyword: '分析', advice: '細部への注意が幸運をつかむ' },
+      { name: '天秤座', symbol: '♎', element: '風', keyword: '調和', advice: 'バランスを取ることで道が開ける' },
+      { name: '蠍座',   symbol: '♏', element: '水', keyword: '変革', advice: '深く掘り下げることに価値がある' },
+      { name: '射手座', symbol: '♐', element: '火', keyword: '自由', advice: '遠くを見渡す視野が幸運の種' },
+      { name: '山羊座', symbol: '♑', element: '地', keyword: '忍耐', advice: '着実な一歩が大きな成果へ' },
+      { name: '水瓶座', symbol: '♒', element: '風', keyword: '革新', advice: '独自の発想が突破口に' },
+      { name: '魚座',   symbol: '♓', element: '水', keyword: '夢想', advice: '心の声に耳を傾けると吉' },
+    ];
+
+    const PLANET_MESSAGES = {
+      sun: {
+        fire: '太陽が火のサインに輝き、あなたのエネルギーは最高潮です。',
+        earth: '太陽が大地に根を張り、堅実な繁栄を約束しています。',
+        air: '太陽が風に乗り、コミュニケーションに黄金のチャンスが訪れます。',
+        water: '太陽が心の海に光を投げかけ、感情の豊かさが開花します。'
+      },
+      moon: {
+        fire: '月が炎の如く燃え、直感的な行動が幸運を引き寄せます。',
+        earth: '月が大地を守り、家庭と身近な縁に温かな恵みがあります。',
+        air: '月が思考を清め、心に浮かんだアイデアを大切にしてください。',
+        water: '月が水面に揺れ、夢見る力がひときわ強まっています。'
+      },
+      mercury: {
+        fire: '水星が情熱的に語りかけ、あなたの言葉に説得力が宿ります。',
+        earth: '水星が地に足のついた知恵をもたらし、実務が捗ります。',
+        air: '水星が風に乗り、情報とアイデアが快速で巡ってきます。',
+        water: '水星が感情と知性を橋渡しし、心の声を言葉にする好機です。'
+      },
+      venus: {
+        fire: '金星が炎のように輝き、恋愛と美に情熱的な引力が生まれます。',
+        earth: '金星が大地に実りをもたらし、物質的・感情的な豊かさが訪れます。',
+        air: '金星が社交の風を起こし、素敵な出会いと縁が膨らみます。',
+        water: '金星が水面に揺れ、芸術的な感性と愛情が深まります。'
+      },
+      mars: {
+        fire: '火星がさらに燃え上がり、無敵の行動力で道を切り拓けます。',
+        earth: '火星が大地に活力を与え、コツコツとした努力が実を結びます。',
+        air: '火星が風を切り、競争やチャレンジで抜群の才能を発揮します。',
+        water: '火星が水中で静かに動き、内なる闘志が静かに目覚めています。'
+      },
+      jupiter: {
+        fire: '木星が炎を高く燃やし、拡大と成長のエネルギーが溢れます。',
+        earth: '木星が大地を豊かにし、物質的な幸運と安定した繁栄をもたらします。',
+        air: '木星が知識と視野を広げ、学びと旅に特別な幸運が宿ります。',
+        water: '木星が感情を温かく包み、人間関係の深みと幸福感が増します。'
+      },
+      saturn: {
+        fire: '土星が炎を制御し、情熱を持続可能な形に整える知恵を授けます。',
+        earth: '土星が大地をしっかり固め、長期的な計画が着実に進みます。',
+        air: '土星が風を鎮め、言葉や思考に深い責任と重みをもたらします。',
+        water: '土星が水に境界を設け、感情の成熟と深い洞察をもたらします。'
+      }
+    };
+
+    const ELEMENT_MAP = { '火': 'fire', '地': 'earth', '風': 'air', '水': 'water' };
+
+    const OVERALL_TEMPLATES = [
+      (dominant) => `今日は「${dominant}」のエネルギーが支配的。宇宙があなたを後押ししています。`,
+      (dominant) => `星々の配置が「${dominant}」の流れを強め、今日は特別な日になりそうです。`,
+      (dominant) => `「${dominant}」の力が全体を貫き、あなたの可能性が大きく広がっています。`,
+      (dominant) => `今日の天体配置は「${dominant}」を軸に動き、新しい扉が開きそうな予感があります。`,
+    ];
+
+    const LUCKY_COLORS = [
+      { text: 'ゴールド ✨', color: '#FFD700' },
+      { text: 'ラベンダー 💜', color: '#B57BEE' },
+      { text: 'ローズピンク 🌸', color: '#FF9FB0' },
+      { text: 'アクアマリン 💎', color: '#7FDBDA' },
+      { text: 'サンセットオレンジ 🌅', color: '#FF8C42' },
+      { text: 'ミストグリーン 🌿', color: '#7FB77E' },
+      { text: 'ミッドナイトブルー 🌙', color: '#6A82C4' },
+      { text: 'クリームホワイト 🤍', color: '#F5F0E8' },
+      { text: 'バーガンディ 🍷', color: '#C0415A' },
+      { text: 'ターコイズ 🩵', color: '#40C4B4' },
+    ];
+
+    function seededRand(seed) {
+      let s = seed;
+      return function() {
+        s = (s * 1664525 + 1013904223) & 0xffffffff;
+        return (s >>> 0) / 0xffffffff;
+      };
+    }
+
+    function getDateSeed() {
+      const d = new Date();
+      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    }
+
+    function shuffleArray(arr, rand) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function drawFortune(extraSeed = 0) {
+      const seed = getDateSeed() + extraSeed;
+      const rand = seededRand(seed);
+
+      const shuffledSigns = shuffleArray(SIGNS, rand);
+      const placements = PLANETS.map((planet, i) => ({
+        planet,
+        sign: shuffledSigns[i % shuffledSigns.length]
+      }));
+
+      const elementCount = { fire: 0, earth: 0, air: 0, water: 0 };
+      placements.forEach(({ sign }) => {
+        const el = ELEMENT_MAP[sign.element];
+        if (el) elementCount[el]++;
+      });
+
+      const dominantElement = Object.entries(elementCount).sort((a, b) => b[1] - a[1])[0][0];
+      const elementNameMap = { fire: '火のエネルギー', earth: '大地の力', air: '風の知恵', water: '水の感性' };
+
+      const overallIdx = Math.floor(rand() * OVERALL_TEMPLATES.length);
+      const overallMessage = OVERALL_TEMPLATES[overallIdx](elementNameMap[dominantElement]);
+
+      const luckyColorIdx = Math.floor(rand() * LUCKY_COLORS.length);
+      const luckyNumber = Math.floor(rand() * 9) + 1;
+
+      return { placements, overallMessage, luckyColor: LUCKY_COLORS[luckyColorIdx], luckyNumber, dominantElement };
+    }
+
+    function renderPlanetCard(placement, index) {
+      const { planet, sign } = placement;
+      const elementKey = ELEMENT_MAP[sign.element];
+      const msg = PLANET_MESSAGES[planet.key]?.[elementKey] || sign.advice;
+
+      const card = document.createElement('div');
+      card.className = 'planet-card rounded-xl p-4 fade-in-up';
+      card.style.animationDelay = (index * 80) + 'ms';
+      card.setAttribute('role', 'article');
+      card.setAttribute('aria-label', `${planet.name}は${sign.name}に位置しています`);
+
+      const header = document.createElement('div');
+      header.className = 'flex items-center gap-3 mb-2';
+
+      const symbolEl = document.createElement('span');
+      symbolEl.className = 'text-3xl';
+      symbolEl.style.color = planet.color;
+      symbolEl.setAttribute('aria-hidden', 'true');
+      symbolEl.textContent = planet.symbol;
+
+      const titleDiv = document.createElement('div');
+
+      const planetName = document.createElement('p');
+      planetName.className = 'font-bold text-sm';
+      planetName.style.color = planet.color;
+      planetName.textContent = planet.name;
+
+      const signInfo = document.createElement('p');
+      signInfo.className = 'text-purple-300 text-xs';
+      signInfo.textContent = sign.symbol + ' ' + sign.name + '（' + sign.element + '）';
+
+      titleDiv.appendChild(planetName);
+      titleDiv.appendChild(signInfo);
+      header.appendChild(symbolEl);
+      header.appendChild(titleDiv);
+
+      const msgEl = document.createElement('p');
+      msgEl.className = 'text-gray-300 text-xs leading-relaxed';
+      msgEl.textContent = msg;
+
+      const adviceEl = document.createElement('p');
+      adviceEl.className = 'text-purple-400 text-xs mt-1 italic';
+      adviceEl.textContent = '💡 ' + sign.advice;
+
+      card.appendChild(header);
+      card.appendChild(msgEl);
+      card.appendChild(adviceEl);
+
+      return card;
+    }
+
+    function saveHistory(fortune) {
+      const history = JSON.parse(localStorage.getItem('astrology-history') || '[]');
+      const entry = {
+        date: new Date().toLocaleDateString('ja-JP'),
+        time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+        overall: fortune.overallMessage,
+        luckyColor: fortune.luckyColor.text,
+        luckyNumber: fortune.luckyNumber
+      };
+      history.unshift(entry);
+      if (history.length > 5) history.splice(5);
+      localStorage.setItem('astrology-history', JSON.stringify(history));
+    }
+
+    function renderHistory() {
+      const history = JSON.parse(localStorage.getItem('astrology-history') || '[]');
+      const historySection = document.getElementById('history-section');
+      const historyList = document.getElementById('history-list');
+
+      if (history.length === 0) {
+        historySection.classList.add('hidden');
+        return;
+      }
+
+      historySection.classList.remove('hidden');
+      historyList.innerHTML = '';
+
+      history.forEach((entry) => {
+        const item = document.createElement('div');
+        item.className = 'planet-card rounded-lg p-3';
+
+        const dateEl = document.createElement('p');
+        dateEl.className = 'text-purple-400 text-xs font-bold';
+        dateEl.textContent = entry.date + ' ' + entry.time;
+
+        const msgEl = document.createElement('p');
+        msgEl.className = 'text-gray-300 text-xs mt-1';
+        msgEl.textContent = entry.overall;
+
+        const colorEl = document.createElement('p');
+        colorEl.className = 'text-xs text-purple-500 mt-1';
+        colorEl.textContent = 'ラッキー: ' + entry.luckyColor + ' / ' + entry.luckyNumber;
+
+        item.appendChild(dateEl);
+        item.appendChild(msgEl);
+        item.appendChild(colorEl);
+        historyList.appendChild(item);
+      });
+    }
+
+    let drawCount = 0;
+
+    document.getElementById('draw-btn').addEventListener('click', () => {
+      drawCount++;
+      const fortune = drawFortune(drawCount * 7919);
+
+      const resultSection = document.getElementById('result-section');
+      resultSection.classList.remove('hidden');
+
+      document.getElementById('overall-text').textContent = fortune.overallMessage;
+
+      const grid = document.getElementById('planets-grid');
+      grid.innerHTML = '';
+      fortune.placements.forEach((placement, i) => {
+        grid.appendChild(renderPlanetCard(placement, i));
+      });
+
+      const luckyColorEl = document.getElementById('lucky-color');
+      luckyColorEl.textContent = fortune.luckyColor.text;
+      luckyColorEl.style.color = fortune.luckyColor.color;
+
+      document.getElementById('lucky-number').textContent = fortune.luckyNumber;
+
+      const lastDrawn = document.getElementById('last-drawn');
+      const now = new Date();
+      lastDrawn.textContent = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' に占いました';
+
+      saveHistory(fortune);
+      renderHistory();
+
+      resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    document.getElementById('clear-history-btn').addEventListener('click', () => {
+      localStorage.removeItem('astrology-history');
+      renderHistory();
+    });
+
+    // Generate stars
+    const starsContainer = document.getElementById('stars-container');
+    for (let i = 0; i < 100; i++) {
+      const star = document.createElement('div');
+      star.className = 'star';
+      const size = Math.random() * 2 + 1;
+      star.style.width = size + 'px';
+      star.style.height = size + 'px';
+      star.style.left = Math.random() * 100 + '%';
+      star.style.top = Math.random() * 100 + '%';
+      star.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+      star.style.setProperty('--delay', (Math.random() * 4) + 's');
+      starsContainer.appendChild(star);
+    }
+
+    // Load history on start
+    renderHistory();
+  </script>
+</body>
+</html>
